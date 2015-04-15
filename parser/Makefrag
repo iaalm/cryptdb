@@ -22,4 +22,10 @@ $(OBJDIR)/libedbparser.so: $(EDBPARSER_OBJS) \
 	       -Wl,--whole-archive -L$(MYBUILD)/libmysqld -lmysqld \
 	       -Wl,--no-whole-archive -laio -lz -ldl -lrt -lcrypt
 
+install: install_parser
+
+.PHONY: install_parser
+install_parser: $(OBJDIR)/libedbparser.so
+	install -m 644 $(OBJDIR)/libedbparser.so /usr/lib
+
 # vim: set noexpandtab:
