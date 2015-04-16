@@ -699,16 +699,45 @@ private:
     virtual const blowfish &getBlowfish_() const = 0;
 };
 
+class DET_abstract_number : public EncLayer {
+public:
+    DET_abstract_number(const std::string &key, int64_t shift);
+    DET_abstract_number(unsigned int id, const std::string &serial);
+
+    virtual std::string name() const = 0;
+    virtual SECLEVEL level() const = 0;
+
+    std::string doSerialize() const;
+    Create_field *newCreateField(const Create_field &cf,
+                                 const std::string &anonname = "")
+        const;
+
+    // FIXME: final
+    Item *encrypt(const Item &ptext, uint64_t IV) const;
+    Item *decrypt(const Item &ctext, uint64_t IV) const;
+    Item *decryptUDF(Item *const col, Item *const ivcol = NULL) const;
+
+protected:
+    const std::string key;
+    const blowfish bf;
+    const int64_t shift;
+    static const int bf_key_size = 16;
+
+private:
+    std::string getKeyFromSerial(const std::string &serial);
+    static int64_t getShift(const std::string &serial);
+};
+
 class DET_abstract_decimal : public DET_abstract_number {
 public:
-    DET_abstract_decimal(Create_field *const cf,
+    DET_abstract_decimal(const Create_field &cf,
                          const std::string &seed_key);
     DET_abstract_decimal(unsigned int id, const std::string &serial);
 
     // FIXME: final.
     std::string doSerialize() const;
     Item *encrypt(const Item &ptext, uint64_t IV) const;
-    Item *decrypt(Item *const ctext, uint64_t IV) const;
+    Item *decrypt(const Item &ctext, uint64_t IV) const;
 
 protected:
     const uint decimals;      // number of decimals
@@ -756,7 +785,7 @@ static udf_func u_decDETInt = {
 
 class DET_dec : public DET_abstract_decimal {
 public:
-    DET_dec(Create_field *const cf, const std::string &seed_key);
+    DET_dec(const Create_field &cf, const std::string &seed_key);
 
     // create object from serialized contents
     DET_dec(unsigned int id, const std::string &serial);
@@ -896,18 +925,18 @@ DET_abstract_integer::getKeyFromSerial(const std::string &serial)
     return serial.substr(serial.find(' ')+1, std::string::npos);
 }
 
-DET_abstract_decimal::DET_abstract_decimal(Create_field *const cf,
+DET_abstract_decimal::DET_abstract_decimal(const Create_field &cf,
                                            const std::string &seed_key)
-    : DET_abstract_number(seed_key, pow(10, cf->decimals)),
-      decimals(cf->decimals)
+    : DET_abstract_number(seed_key, pow(10, cf.decimals)),
+      decimals(cf.decimals)
 {
     // > make sure we have at most 8 precision
     // > a number with form DECIMAL(a, b) has decimals = b
     //   and length = a + b
-    assert_s(cf->length - cf->decimals <= 8,
+    assert_s(cf.length - cf.decimals <= 8,
              " this type of decimal not supported ");
 
-    // decimals = cf->decimals;
+    // decimals = cf.decimals;
     // shift = pow(10, decimals);
 }
 
@@ -942,7 +971,7 @@ Item *DET_abstract_decimal::encrypt(const Item &ptext, uint64_t IV) const
     return DET_abstract_number::encrypt(*ptext_int, IV);
 }
 
-Item *DET_abstract_decimal::decrypt(Item *const ctext, uint64_t IV) const
+Item *DET_abstract_decimal::decrypt(const Item &ctext, uint64_t IV) const
 {
     const std::unique_ptr<Item_int>
         res_int(static_cast<Item_int*>(DET_abstract_number::decrypt(ctext,
@@ -957,7 +986,7 @@ Item *DET_abstract_decimal::decrypt(Item *const ctext, uint64_t IV) const
     return res;
 }
 
-DET_dec::DET_dec(Create_field * const cf, const std::string &seed_key)
+DET_dec::DET_dec(const Create_field &cf, const std::string &seed_key)
     : DET_abstract_decimal(cf, seed_key)
 {}
 
@@ -1084,7 +1113,7 @@ public:
 class DETJOIN_dec : public DET_abstract_decimal {
     //TODO
 public:
-    DETJOIN_dec(Create_field *const cf, const std::string &seed_key)
+    DETJOIN_dec(const Create_field &cf, const std::string &seed_key)
         : DET_abstract_decimal(cf, seed_key) {}
 
     // serialize from parent;  unserialize:
@@ -1120,7 +1149,7 @@ DETJOINFactory::deserialize(unsigned int id, const SerialLayer &sl)
                                                     sl.layer_info);
     } else if ("DETJOIN_dec" == sl.name) {
 	return std::unique_ptr<EncLayer>(new DETJOIN_dec(id,
-							sl.layer_info);
+							sl.layer_info));
     } else if ("DETJOIN_str" == sl.name) {
         return std::unique_ptr<EncLayer>(new DETJOIN_str(id,
                                                          sl.layer_info));
@@ -1137,6 +1166,8 @@ DETJOINFactory::deserialize(unsigned int id, const SerialLayer &sl)
 class OPE_int : public EncLayer {
 public:
     OPE_int(const Create_field &cf, const std::string &seed_key);
+    OPE_int(unsigned int id, const std::string &serial,
+                 size_t plain_size = 4, size_t ciph_size = 8);
     OPE_int(unsigned int id, const CryptedInteger &cinteger,
             size_t plain_size, size_t ciph_size);
     CryptedInteger opeHelper(const Create_field &f,
@@ -1194,7 +1225,7 @@ private:
 
 class OPE_dec : public OPE_int {
 public:
-    OPE_dec(Create_field * const cf, const std::string &seed_key);
+    OPE_dec(const Create_field &cf, const std::string &seed_key);
 
     // serialize and deserialize
     std::string doSerialize() const;
@@ -1203,7 +1234,7 @@ public:
     std::string name() const {return "OPE_dec";}
 
     Item *encrypt(const Item &p, uint64_t IV) const;
-    Item * decrypt(Item * const c, uint64_t IV) const;
+    Item * decrypt(const Item & c, uint64_t IV) const;
 
 private:
     uint const decimals;
@@ -1237,11 +1268,11 @@ OPEFactory::deserialize(unsigned int id, const SerialLayer &sl)
     }
 }
 
-OPE_dec::OPE_dec(Create_field * const cf, const std::string &seed_key)
-    : OPE_int(cf, seed_key), decimals(cf->decimals),
+OPE_dec::OPE_dec(const Create_field &cf, const std::string &seed_key)
+    : OPE_int(cf, seed_key), decimals(cf.decimals),
       shift(pow(10, decimals))
 {
-    assert_s(cf->length - cf->decimals <= 8,
+    assert_s(cf.length - cf.decimals <= 8,
              "this type of decimal not supported ");
 }
 
@@ -1268,7 +1299,7 @@ OPE_dec::encrypt(const Item &ptext, uint64_t IV) const
 
 
 Item *
-OPE_dec::decrypt(Item * const ctext, uint64_t IV) const
+OPE_dec::decrypt(const Item &ctext, uint64_t IV) const
 {
     const std::unique_ptr<Item_int>
         res_int(static_cast<Item_int *>(OPE_int::decrypt(ctext, IV)));
@@ -1344,6 +1375,14 @@ opeCiphSize(const CryptedInteger &cinteger)
 OPE_int::OPE_int(const Create_field &f, const std::string &seed_key)
     : cinteger(opeHelper(f, prng_expand(seed_key, key_bytes))),
       plain_size(opePlainSize(cinteger)), ciph_size(opeCiphSize(cinteger)),
+      ope(OPE(cinteger.getKey(), plain_size * BITS_PER_BYTE,
+              ciph_size * BITS_PER_BYTE))
+{}
+
+OPE_int::OPE_int(unsigned int id, const std::string &serial,
+                 size_t plain_size, size_t ciph_size)
+    : EncLayer(id), cinteger(CryptedInteger::deserialize(serial)), plain_size(plain_size),
+      ciph_size(ciph_size),
       ope(OPE(cinteger.getKey(), plain_size * BITS_PER_BYTE,
               ciph_size * BITS_PER_BYTE))
 {}
@@ -1501,7 +1540,7 @@ OPE_str::decrypt(const Item &ctext, uint64_t IV) const
 
 class HOM_dec : public HOM {
 public:
-    HOM_dec(Create_field * const cf, const std::string &seed_key);
+    HOM_dec(const Create_field &cf, const std::string &seed_key);
 
     //deserialize
     HOM_dec(unsigned int id, const std::string &serial);
@@ -1512,7 +1551,7 @@ public:
 
     //TODO needs multi encrypt and decrypt
     Item *encrypt(const Item &p, uint64_t IV) const;
-    Item * decrypt(Item * const c, uint64_t IV) const;
+    Item *decrypt(const Item &c, uint64_t IV) const;
 
     //expr is the expression (e.g. a field) over which to sum
     Item *sumUDA(Item *const expr) const;
@@ -1580,11 +1619,11 @@ ItemStrToZZ(const Item &i)
     return ZZFromString(ItemToString(i));
 }
 
-HOM_dec::HOM_dec(Create_field * const cf, const std::string &seed_key)
-    : HOM(cf, seed_key), decimals(cf->decimals),
+HOM_dec::HOM_dec(const Create_field &cf, const std::string &seed_key)
+    : HOM(cf, seed_key), decimals(cf.decimals),
       shift(power(to_ZZ(10), decimals))
 {
-    assert_s(cf->length <= 120, "too large decimal for HOM layer");
+    assert_s(cf.length <= 120, "too large decimal for HOM layer");
 }
 
 std::string
@@ -1650,7 +1689,7 @@ HOM_dec::encrypt(const Item &ptext, uint64_t IV) const
 }
 
 Item *
-HOM_dec::decrypt(Item * const ctext, uint64_t IV) const
+HOM_dec::decrypt(const Item &ctext, uint64_t IV) const
 {
     const ZZ enc = ItemStrToZZ(ctext);
     const ZZ dec = sk->decrypt(enc);

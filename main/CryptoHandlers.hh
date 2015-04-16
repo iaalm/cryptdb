@@ -70,6 +70,7 @@ public:
         const
     {
         thrower() << "decryptUDF not supported";
+	return NULL;
     }
 
     virtual std::string doSerialize() const = 0;
