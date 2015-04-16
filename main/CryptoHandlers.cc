@@ -707,7 +707,9 @@ public:
     virtual std::string name() const = 0;
     virtual SECLEVEL level() const = 0;
 
-    std::string doSerialize() const;
+    std::string doSerialize() const{
+        return std::to_string(shift) + " " + key;
+    } 
     Create_field *newCreateField(const Create_field &cf,
                                  const std::string &anonname = "")
         const;
@@ -727,6 +729,33 @@ private:
     std::string getKeyFromSerial(const std::string &serial);
     static int64_t getShift(const std::string &serial);
 };
+
+int64_t
+DET_abstract_number::getShift(const std::string &serial)
+{
+    return atol(serial.substr(0, serial.find(' ')).c_str());
+}
+
+DET_abstract_number::DET_abstract_number(const std::string &key,
+                                         int64_t shift)
+    : EncLayer(), key(key), bf(key), shift(shift)
+{}
+
+DET_abstract_number::DET_abstract_number(unsigned int id,
+                                         const std::string &serial)
+    : EncLayer(id), key(getKeyFromSerial(serial)), bf(key),
+      shift(getShift(serial))
+{}
+
+Create_field *
+DET_abstract_number::newCreateField(const Create_field &cf,
+                                    const std::string &anonname) const
+{
+    const int64_t ciph_size = 8;
+    // MYSQL_TYPE_LONGLONG because blowfish works on 64 bit blocks.
+    return lowLevelcreateFieldHelper(cf, ciph_size, MYSQL_TYPE_LONGLONG,
+                             anonname);
+}
 
 class DET_abstract_decimal : public DET_abstract_number {
 public:
@@ -893,6 +922,37 @@ DET_abstract_integer::encrypt(const Item &ptext, uint64_t IV) const
 }
 
 Item *
+DET_abstract_number::encrypt(const Item &ptext, uint64_t IV) const
+{
+    // assert(!stringItem(ptext));
+    const ulonglong value = RiboldMYSQL::val_uint(ptext);
+
+    const ulonglong res = static_cast<ulonglong>(bf.encrypt(value+shift));
+    LOG(encl) << "DET_int enc " << value << "--->" << res;
+    return new (current_thd->mem_root) Item_int(res);
+}
+
+Item *
+DET_abstract_number::decrypt(const Item &ctext, uint64_t IV) const
+{
+    const ulonglong value = ((Item_int *)(&ctext))->value;
+
+    if (shift) {
+        //std::cout << "value: " << value <<  " shift: " << shift << "\n";
+
+        longlong retdec = static_cast<longlong>(bf.decrypt(value));
+        retdec -= shift;
+        LOG(encl) << "DET_int dec " << value << "--->" << retdec;
+        return new (current_thd->mem_root) Item_int(retdec);
+    }
+
+    const ulonglong retdec = bf.decrypt(value) - shift;
+    LOG(encl) << "DET_int dec " << value << "--->" << retdec;
+    return new (current_thd->mem_root) Item_int(retdec);
+}
+
+
+Item *
 DET_abstract_integer::decrypt(const Item &ctext, uint64_t IV) const
 {
     const ulonglong value = static_cast<const Item_int &>(ctext).value;
@@ -921,6 +981,12 @@ DET_abstract_integer::decryptUDF(Item *const col, Item *const ivcol)
 
 std::string
 DET_abstract_integer::getKeyFromSerial(const std::string &serial)
+{
+    return serial.substr(serial.find(' ')+1, std::string::npos);
+}
+
+std::string
+DET_abstract_number::getKeyFromSerial(const std::string &serial)
 {
     return serial.substr(serial.find(' ')+1, std::string::npos);
 }
@@ -2033,3 +2099,27 @@ const std::vector<udf_func*> udf_list = {
     &u_cryptdb_version
 };
 
+Item *
+DET_abstract_number::decryptUDF(Item *const col, Item *const ivcol)
+    const
+{
+    List<Item> l;
+    l.push_back(col);
+
+    l.push_back(get_key_item(key));
+    // Only used for signed columns, otherwise zero.
+    l.push_back(new (current_thd->mem_root)
+                    Item_int(static_cast<ulonglong>(shift)));
+
+    Item *const udfdec = new (current_thd->mem_root)
+                             Item_func_udf_int(&u_decDETInt, l);
+    udfdec->name = NULL;
+
+    Item *const udf = 0 == shift ? new (current_thd->mem_root)
+                                       Item_func_unsigned(udfdec)
+                                 : new (current_thd->mem_root)
+                                       Item_func_signed(udfdec);
+    udf->name = NULL;
+
+    return udf;
+}
