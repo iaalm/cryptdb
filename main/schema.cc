@@ -388,6 +388,7 @@ onionlayout FieldMeta::determineOnionLayout(const AES_KEY *const m_key,
                                             const Create_field &f,
                                             SECURITY_RATING sec_rating)
 {
+LOG(warn) << "fsadfadsfa";
     if (sec_rating == SECURITY_RATING::PLAIN) {
         // assert(!m_key);
         return PLAIN_ONION_LAYOUT;

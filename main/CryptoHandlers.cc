@@ -1180,7 +1180,9 @@ class DETJOIN_dec : public DET_abstract_decimal {
     //TODO
 public:
     DETJOIN_dec(const Create_field &cf, const std::string &seed_key)
-        : DET_abstract_decimal(cf, seed_key) {}
+        : DET_abstract_decimal(cf, seed_key) {
+LOG(warn) << "called";
+}
 
     // serialize from parent;  unserialize:
     DETJOIN_dec(unsigned int id, const std::string &serial)

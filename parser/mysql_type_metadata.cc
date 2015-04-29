@@ -153,6 +153,44 @@ MySQLLongLongMetaData::isRangeSupported(std::pair<int64_t, uint64_t> inclusiveRa
         && inclusiveRange.second <= maximum;
 }
 
+std::pair<int64_t, uint64_t>
+MySQLDecimalMetaData::supportsRange(const Create_field &field) const
+{
+    // 8 bytes
+    const unsigned int bytes = 8;
+    return supportsRangeHelper(field, bytes);
+}
+
+bool
+MySQLDecimalMetaData::isRangeSupported(std::pair<int64_t, uint64_t> inclusiveRange) const
+{
+    // signed   : -9223372036854775808      9223372036854775807
+    // unsigned : 0                         18446744073709551615
+    const int64_t minimum  = 0;
+    const uint64_t maximum = UINT64_MAX;
+    return inclusiveRange.first >= minimum
+        && inclusiveRange.second <= maximum;
+}
+
+std::pair<int64_t, uint64_t>
+MySQLNewDecimalMetaData::supportsRange(const Create_field &field) const
+{
+    // 8 bytes
+    const unsigned int bytes = 8;
+    return supportsRangeHelper(field, bytes);
+}
+
+bool
+MySQLNewDecimalMetaData::isRangeSupported(std::pair<int64_t, uint64_t> inclusiveRange) const
+{
+    // signed   : -9223372036854775808      9223372036854775807
+    // unsigned : 0                         18446744073709551615
+    const int64_t minimum  = 0;
+    const uint64_t maximum = UINT64_MAX;
+    return inclusiveRange.first >= minimum
+        && inclusiveRange.second <= maximum;
+}
+
 #undef RANGE_TEST
 
 // ########################################

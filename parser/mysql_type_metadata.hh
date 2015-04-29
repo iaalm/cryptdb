@@ -151,13 +151,30 @@ public:
         AESTypeAndLength(unsigned long len, bool pad) const
         { assert(false); }
     Item *intoItem(const std::string &value) const;
+    virtual std::pair<int64_t, uint64_t>
+        supportsRange(const Create_field &f) const = 0;
+    virtual bool
+        isRangeSupported(std::pair<int64_t, uint64_t> inclusiveRange)
+        const = 0;
 };
 
 class MySQLDecimalMetaData :
-    public AbstractMySQLDecimalMetaData<MYSQL_TYPE_DECIMAL> {};
+    public AbstractMySQLDecimalMetaData<MYSQL_TYPE_DECIMAL> {
+    std::pair<int64_t, uint64_t>
+        supportsRange(const Create_field &f) const;
+    bool
+        isRangeSupported(std::pair<int64_t, uint64_t> inclusiveRange)
+        const;
+};
 
 class MySQLNewDecimalMetaData :
-    public AbstractMySQLDecimalMetaData<MYSQL_TYPE_NEWDECIMAL> {};
+    public AbstractMySQLDecimalMetaData<MYSQL_TYPE_NEWDECIMAL> {
+    std::pair<int64_t, uint64_t>
+        supportsRange(const Create_field &f) const;
+    bool
+        isRangeSupported(std::pair<int64_t, uint64_t> inclusiveRange)
+        const;
+};
 
 
 // ########################################

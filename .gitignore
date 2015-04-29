@@ -2,3 +2,6 @@
 tags
 *.swp
 mysql-src/
+*.cdepn
+/bins/proxy-bin/
+/shadow
