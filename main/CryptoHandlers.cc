@@ -1235,7 +1235,8 @@ class OPE_int : public EncLayer {
 public:
     OPE_int(const Create_field &cf, const std::string &seed_key);
     OPE_int(unsigned int id, const std::string &serial,
-                 size_t plain_size = 4, size_t ciph_size = 8);
+                 size_t plain_size, size_t ciph_size);
+    OPE_int(unsigned int id, const std::string &serial);
     OPE_int(unsigned int id, const CryptedInteger &cinteger,
             size_t plain_size, size_t ciph_size);
     CryptedInteger opeHelper(const Create_field &f,
@@ -1347,7 +1348,8 @@ OPE_dec::OPE_dec(const Create_field &cf, const std::string &seed_key)
 std::string
 OPE_dec::doSerialize() const
 {
-    return std::to_string(decimals) + " " + OPE_int::doSerialize();
+	std::string str = OPE_int::doSerialize();
+    return std::to_string(decimals) + " " + str;
 }
 
 OPE_dec::OPE_dec(unsigned int id, const std::string &serial)
@@ -1462,6 +1464,25 @@ OPE_int::OPE_int(unsigned int id, const CryptedInteger &cinteger,
       ope(OPE(cinteger.getKey(), plain_size * BITS_PER_BYTE,
               ciph_size * BITS_PER_BYTE))
 {}
+
+OPE_int::OPE_int(unsigned int id, const std::string &serial)
+: EncLayer(id), cinteger(CryptedInteger::deserialize(unserialize_string(serial)[2])),
+plain_size(strtoul_(unserialize_string(serial)[0])),
+ciph_size(strtoul_(unserialize_string(serial)[1])),
+      ope(OPE(cinteger.getKey(), plain_size * BITS_PER_BYTE,
+              ciph_size * BITS_PER_BYTE))
+ {}
+/*
+{
+    EncLayer = id;
+    const std::vector<std::string> vec = unserialize_string(serial);
+    plain_size = strtoul_(vec[0]);
+    ciph_size  = strtoul_(vec[1]);
+    cinteger = CryptedInteger(CryptedInteger::deserialize(vec[2]));
+    ope = OPE(this.cinteger.getKey(), this.plain_size * BITS_PER_BYTE,
+              this.ciph_size * BITS_PER_BYTE);
+}
+*/
 
 std::unique_ptr<OPE_int>
 OPE_int::deserialize(unsigned int id, const std::string &serial)
